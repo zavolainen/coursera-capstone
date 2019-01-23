@@ -1,0 +1,156 @@
+---
+title: "Coursera Data Scienence Specialization Milestone Report"
+author: "Jani Savolainen"
+date: "21 January 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Summary
+
+This the milestone report for the Coursera Data Scienence Specialization course. The goal was to build basic n-gram model to see the frequencies of the different word combinations. With that data it is possible to build an algorhitm predicting the next word the user is typing with the previous words.
+
+## Loading the data
+
+```{r load the data}
+setwd("~/Data_Science_Specialization/capstone_project")
+library(stringi)
+
+dataUrl <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+fileName <- "data/Coursera-SwiftKey.zip"
+sourceFolder <- "~/Data_Science_Specialization/capstone_project/data/final"
+
+## load the zip if it does not exist
+if (!file.exists(fileName)) {
+        download.file(dataUrl, fileName, mode = "wb")
+        unzip(fileName)
+}
+
+list.files("final/en_US")
+
+## read the blogs and twitter files with readLines function
+blogs <- readLines("./final/en_US/en_US.blogs.txt", encoding = "UTF-8")
+twitter <- readLines("./final/en_US/en_US.twitter.txt", warn = FALSE, encoding="UTF-8")
+news <- readLines("./final/en_US/en_US.news.txt", warn = FALSE, encoding="UTF-8")
+
+
+```
+
+## Basic summaries of the files
+
+Generate a summery of the three files including count of lines, words, characters, longest row and file size.
+
+```{r summary}
+wordsTwitter <- stri_stats_latex(twitter)[4]
+charTwitter <- sum(nchar(twitter))
+longrowTwitter <- max(nchar(twitter))
+sizeTwitter <- (file.info("./final/en_US/en_US.twitter.txt"))$size / 1024 ^ 2
+
+wordsBlogs <- stri_stats_latex(blogs)[4]
+charBlogs <- sum(nchar(blogs))
+longrowBlogs <- max(nchar(blogs))
+sizeBlog <- (file.info("./final/en_US/en_US.blogs.txt"))$size / 1024 ^ 2
+
+wordsNews <-stri_stats_latex(news)[4]
+charNews<-sum(nchar(news))
+longrowNews <- max(nchar(news))
+sizeNews <- (file.info("./final/en_US/en_US.news.txt"))$size / 1024 ^ 2
+
+data.frame("source" = c("twitter", "blogs", "news"),
+           "lines" = c(length(twitter),length(blogs), length(news)),
+           "words" = c(wordsTwitter, wordsBlogs,wordsNews),
+           "characters"=c(charTwitter,charBlogs, charNews),
+           "longest line"=c(longrowTwitter,longrowBlogs,longrowNews),
+           "file size"=c(sizeTwitter, sizeBlog, sizeNews))
+```
+
+## Create a sample and clean the data
+
+Let's create a sample with 5 percent of each data set. Let's get rid of the punctuation.
+
+```{r sample and clean}
+set.seed(112) # set seed to be able to reproduce the sampling
+library(caret)
+library(tm) # text mining library
+
+## let's do a sample data set which includes 5 percent of each data set
+sampleTwitter <- sample(twitter, length(twitter) * 0.05)
+sampleBlogs <- sample(blogs, length(blogs) * 0.05)
+sampleNews <- sample(news, length(news) * 0.05)
+
+sampleData <- c(sampleTwitter, sampleBlogs, sampleNews)
+sampleData <- removePunctuation(sampleData) # remove punctuation
+summary(sampleData)
+
+```
+
+## Create corpus and ngrams
+
+Let's create a corpus and store the ngrams as a Natural Language Prpcessing friendly document-feature matrixes with quanteda package.
+
+```{r corpus and ngrams}
+## as I did not get Rweka package working, I had to develop something else. I found quanteda which can do both corpus and ngrams.
+library(quanteda)
+corpus <- corpus(sampleData)
+
+unigrams<-dfm(corpus,
+              ngrams = 1)
+headUnigrams <- data.frame(topfeatures(unigrams, 20)); names(headUnigrams) <- c("frequency"); # make a df
+headUnigrams$words <- rownames(headUnigrams); # make rown names as a column
+headUnigrams$words <- factor(headUnigrams$words, levels = headUnigrams$words[order(-headUnigrams$frequency)]) # sort
+
+## do the same for bi, tri and 4-grams
+bigrams <- dfm(corpus,
+             ngrams = 2,
+             concatenator=" ")
+headBigrams <- data.frame(topfeatures(bigrams, 20)); names(headBigrams) <- c("frequency"); # make a df
+headBigrams$words <- rownames(headBigrams); # make rown names as a column
+headBigrams$words <- factor(headBigrams$words, levels = headBigrams$words[order(-headBigrams$frequency)]) # sort
+
+trigrams <- dfm(corpus,
+              ngrams = 3,
+              concatenator=" ")
+headTrigrams <- data.frame(topfeatures(trigrams, 20)); names(headTrigrams) <- c("frequency"); # make a df
+headTrigrams$words <- rownames(headTrigrams); # make rown names as a column
+headTrigrams$words <- factor(headTrigrams$words, levels = headTrigrams$words[order(-headTrigrams$frequency)]) # sort
+
+fourgram <- dfm(corpus,
+                ngrams = 4,
+                concatenator=" ")
+headFourgram <- data.frame(topfeatures(fourgram, 20)); names(headFourgram) <- c("frequency"); # make a df
+headFourgram$words <- rownames(headFourgram); # make rown names as a column
+headFourgram$words <- factor(headFourgram$words, levels = headFourgram$words[order(-headFourgram$frequency)]) # sort
+
+## crate graphs
+
+unigg <- ggplot(headUnigrams, aes(headUnigrams$words, headUnigrams$frequency)) # make graph
+unigg + geom_bar(stat='identity', col="black", fill="orange")+labs(title="Unigram words", x="",y="Frequency") +
+        theme(axis.text.x = element_text(angle = 90))
+
+bigg <- ggplot(headBigrams, aes(headBigrams$words, headBigrams$frequency)) # make graph
+bigg + geom_bar(stat='identity', col="black", fill="red")+labs(title="Bigram words", x="",y="Frequency") +
+        theme(axis.text.x = element_text(angle = 90))
+
+trigg <- ggplot(headTrigrams, aes(headTrigrams$words, headTrigrams$frequency)) # make graph
+trigg + geom_bar(stat='identity', col="black", fill="green")+labs(title="Trigram words", x="",y="Frequency") +
+theme(axis.text.x = element_text(angle = 90))
+
+fourgg <- ggplot(headFourgram, aes(headFourgram$words, headFourgram$frequency)) # make graph
+fourgg + geom_bar(stat='identity', col="black", fill="blue")+labs(title="4-gram words", x="",y="Frequency") +
+        theme(axis.text.x = element_text(angle = 90))
+```
+
+## Findings
+
+As we can see from the charts, the is the most popular word in the sample data. The most popular bigrams are "of the" and "in the". Most popular trigram "thanks for the" and fourgram "thanks for the follow". Context really matters as the most popular fourgram is quite irrelevant outside the Twitter and the trigram seems to refer that too.
+
+Building the ngrams with the chosen tecnology seems to be slow so for live predictions this would not be good.
+
+## Next step
+
+Next step is to build a bigger corpus and the a predictive algorhitm based on that. On solution could be that the algorhitm would first see the trigrams for the best prediction and if there is no match, then unigram and finally to unigram.
+
+The final capstone project is to build a Shiny app and deploy the predictive algorhitm with it.
